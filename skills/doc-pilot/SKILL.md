@@ -21,6 +21,18 @@ hooks:
 
 **Turns any document into a step-by-step task navigator. Gets smarter every use.**
 
+---
+<!-- Live experience injection — executed before Claude reads this file, zero token overhead -->
+**Known navigation patterns (from past completions):**
+!`python ~/.claude/skills/doc-pilot/scripts/template_store.py list-templates 2>/dev/null || echo "No templates yet"`
+
+**Top-performing helper skills:**
+!`python ~/.claude/skills/doc-pilot/scripts/template_store.py skill-stats 2>/dev/null || echo "No skill data yet"`
+
+**Recent session log:**
+!`tail -20 ~/.claude/skills/doc-pilot/memory/session_log.md 2>/dev/null || echo "No session log yet"`
+---
+
 ## Core Workflow
 
 ```
