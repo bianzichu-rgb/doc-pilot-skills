@@ -298,6 +298,10 @@ def format_json(result: AnalysisResult) -> str:
 # ─── CLI ──────────────────────────────────────────────────────────────────────
 
 def main():
+    # Fix Windows GBK console encoding — force UTF-8 for emoji/unicode output
+    if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
+        sys.stdout = open(sys.stdout.fileno(), mode='w', encoding='utf-8', buffering=1)
+
     parser = argparse.ArgumentParser(description="Semantic document structure analyser")
     parser.add_argument("path", help="Path to Markdown file, or - for stdin")
     parser.add_argument("--filter", "-f", help="Show only sections matching this category")

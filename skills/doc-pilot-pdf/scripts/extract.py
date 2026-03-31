@@ -325,9 +325,13 @@ class MarkdownPostProcessor:
         return False
 
     def _delonghi_parts(self, line: str) -> str:
-        m = re.match(r"^([A-Z]\d+)\s*[\.:]?\s+(.+)$", line)
+        # Match part indices like A1, B3 — exclude error codes (E9, F3, H20)
+        m = re.match(r"^([A-Z]\d{1,2})\s*[\.:]?\s+(.+)$", line)
         if m:
             idx, desc = m.group(1), m.group(2)
+            # Error codes are followed by error-related words — skip them
+            if re.match(r'^(error|fault|code|err|problem|issue)', desc, re.IGNORECASE):
+                return line
             if 3 < len(desc) < 100:
                 return f"> **[Related Parts]** {idx}: {desc}"
         return line

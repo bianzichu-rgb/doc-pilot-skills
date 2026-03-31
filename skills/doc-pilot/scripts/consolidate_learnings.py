@@ -174,6 +174,8 @@ def update_navigation_patterns(tasks: List[Dict], chronic_failures: Dict):
             )
 
     if new_entries:
+        # Remove the placeholder line once real data exists
+        existing = existing.replace("_No patterns yet — they accumulate automatically after task completions._\n", "")
         atomic_write(NAV_PATTERNS, existing + "\n".join(new_entries))
 
 
