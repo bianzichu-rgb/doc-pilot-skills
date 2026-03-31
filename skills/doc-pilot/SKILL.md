@@ -12,6 +12,9 @@ description: >
   faster and more accurate over time. Also learns which external Claude skills perform
   best for different document types.
 allowed-tools: WebFetch, WebSearch, Read, Write, Glob, Bash(python *)
+hooks:
+  onSessionEnd:
+    script: scripts/consolidate_learnings.py
 ---
 
 # doc-pilot
@@ -189,3 +192,50 @@ Each task records: steps, completion path, failure path, duration, template sour
 | "Walk me through setting up Kubernetes ingress" | WebFetch official docs, generates installation plan |
 | "IKEA KALLAX assembly, step by step" | Fetches PDF, extracts with doc-pilot-pdf, navigates assembly |
 | "帮我一步步蒸东星斑" | Fetches/reads appliance manual for steam function, generates cooking navigation |
+
+---
+
+## Self-Learning Architecture
+
+### Live Experience Injection (Zero Context Cost)
+
+At the start of any task, pull live experience summaries without loading full files:
+
+```bash
+# Check if we have templates for this task type (fast — only prints summary)
+python ~/.claude/skills/doc-pilot/scripts/template_store.py list-templates --task-type "<type>"
+
+# Check skill performance before invoking an external skill
+python ~/.claude/skills/doc-pilot/scripts/template_store.py skill-stats --task-type "<type>"
+```
+
+Only load a full template (`show-template`) when a match is found. This keeps context lean.
+
+### Session-End Consolidation (Auto Hook)
+
+At session end, `scripts/consolidate_learnings.py` runs automatically and:
+1. Scans all tasks completed this session
+2. Identifies patterns (steps that always fail, steps that always succeed)
+3. Updates template success rates
+4. Writes a human-readable `memory/session_log.md` entry
+
+### Reflection Loop (When a Task Goes Wrong)
+
+If a user abandons a task or all steps fail, run a reflection pass:
+
+```
+Reflection prompt: "This task failed. Steps attempted: [X, Y, Z].
+Last error: [description]. What should the step plan have been?
+Suggest an improved step sequence for next time."
+```
+
+Write the reflection output to `memory/templates/<key>_reflection.md`.
+On the next similar task, Read this file before generating the new plan.
+
+### Navigation Pattern Library
+
+Successful navigation sequences are distilled into `references/navigation_patterns.md`.
+Read this file at the start of tasks that match a known pattern. It contains:
+- Proven step sequences for common task types
+- Known failure points and their workarounds
+- Time estimates based on real completion data
