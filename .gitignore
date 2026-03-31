@@ -1,0 +1,9 @@
+# Runtime memory (private user data)
+skills/doc-pilot/memory/tasks/
+skills/doc-pilot/memory/doc_cache/
+skills/doc-pilot/memory/skill_performance.json
+# Template library - user can choose to share
+# skills/doc-pilot/memory/templates/
+*.tmp
+__pycache__/
+*.pyc
