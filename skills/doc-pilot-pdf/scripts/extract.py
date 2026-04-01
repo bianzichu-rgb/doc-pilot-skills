@@ -62,11 +62,41 @@ class StructureBuilder:
     def ingest_block(self, block_text: str, avg_size: float) -> Optional[int]:
         """Returns heading level (1 or 2) if block looks like a heading, else None."""
         level = self._size_to_level(avg_size)
-        if level > 0 and len(block_text) > 200:
-            level = 0
         if level > 0:
-            if re.match(r'^\d+$', block_text.strip()):
-                return None
+            stripped = block_text.strip()
+            # Pure numbers = page numbers
+            if re.match(r'^\d+$', stripped):
+                level = 0
+            # Blocks containing full stops mid-text = sentences, not headings
+            elif re.search(r'[。.!?！？]\s*\S', stripped):
+                level = 0
+            # Lines ending with a sentence period (not abbreviation) are body text
+            elif re.search(r'[^.]\.["\']?\s*$', stripped) and len(stripped) > 15:
+                level = 0
+            # Lines starting with lowercase are continuation of previous sentence
+            elif re.match(r'^[a-z]', stripped):
+                level = 0
+            # Lines starting with bullet chars are feature/list items, not headings
+            elif re.match(r'^[■●•▪▸►▶→]', stripped):
+                level = 0
+            # Lines ending with a dangling conjunction/preposition = sentence continuation
+            elif re.search(r'\b(or|and|but|the|a|an|of|in|is|are|to|for|with|from|that|which|not|as|at|also|be|by|on)\s*$', stripped, re.IGNORECASE):
+                level = 0
+            # H1: max 60 chars; H2: max 80 chars
+            elif level == 1 and len(stripped) > 60:
+                level = 0
+            elif level == 2 and len(stripped) > 80:
+                level = 0
+            else:
+                # Word count guard: real headings are short
+                # All-caps headings can be longer (e.g. "24 HOURS A DAY, 7 DAYS A WEEK FOR LG CUSTOMER SERVICE")
+                words = stripped.split()
+                is_all_caps = stripped == stripped.upper() and bool(re.search(r'[A-Z]', stripped))
+                if level == 1 and len(words) > 7 and not is_all_caps:
+                    level = 0
+                elif level == 2 and len(words) > 9:
+                    level = 0
+        if level > 0:
             self._push(block_text, level)
             return level
         return None
@@ -217,6 +247,22 @@ def enhance_headings(page: fitz.Page, md: str) -> str:
     if h1_sz < body_sz * 1.2:
         return md
 
+    SENTENCE_END_MID = re.compile(r'[。.!?！？…]\s*\S')
+    ENDS_WITH_PERIOD = re.compile(r'[^.]\.["\']?\s*$')  # ends with sentence period (not abbreviations)
+    LOWERCASE_START = re.compile(r'^[a-z]')  # starts with lowercase → continuation line
+
+    def _is_body_text(t: str, max_len: int) -> bool:
+        """Return True if this line looks like body text rather than a heading."""
+        if len(t) > max_len:
+            return True
+        if SENTENCE_END_MID.search(t):
+            return True
+        if ENDS_WITH_PERIOD.search(t) and len(t) > 15:
+            return True
+        if LOWERCASE_START.match(t):
+            return True
+        return False
+
     for b in blocks:
         if b.get("type") == 0:
             for line in b.get("lines", []):
@@ -225,9 +271,13 @@ def enhance_headings(page: fitz.Page, md: str) -> str:
                 if len(text) > 2 and "\n" not in text:
                     pattern = rf"^{re.escape(text)}$"
                     if max_sz >= h1_sz * 0.95:
+                        if _is_body_text(text, 60):
+                            continue
                         if not re.search(rf"^#+\s+{re.escape(text)}$", md, re.MULTILINE):
                             md = re.sub(pattern, f"# {text}", md, flags=re.MULTILINE)
                     elif max_sz >= body_sz * 1.2:
+                        if _is_body_text(text, 80):
+                            continue
                         if not re.search(rf"^#+\s+{re.escape(text)}$", md, re.MULTILINE):
                             md = re.sub(pattern, f"## {text}", md, flags=re.MULTILINE)
     return md
@@ -379,6 +429,42 @@ class MarkdownPostProcessor:
         return "\n".join(lines)
 
 
+# ─── Run-on Heading Merger ────────────────────────────────────────────────────
+
+def _merge_runon_headings(md: str) -> str:
+    """
+    Fix fitz physical line breaks that create false headings.
+    When a text line ends without sentence-ending punctuation and is immediately
+    followed by a ## heading, the heading is likely a continuation — demote it to text.
+
+    Example (before):
+      适合打印 ABS 的耗材。当设定腔体温度后，系统会切
+      ## 换到腔温保持模式。
+
+    After:
+      适合打印 ABS 的耗材。当设定腔体温度后，系统会切
+      换到腔温保持模式。
+    """
+    lines = md.split('\n')
+    out = []
+    SENTENCE_END = re.compile(r'[。.!?！？…、,，:：;；]\s*$')
+    HEADING2 = re.compile(r'^(##)\s+(.+)$')
+
+    for i, line in enumerate(lines):
+        if i == 0:
+            out.append(line)
+            continue
+        m = HEADING2.match(line)
+        if m:
+            prev = out[-1].rstrip() if out else ""
+            # If previous non-empty line ends mid-sentence → demote ## to plain text
+            if prev and not SENTENCE_END.search(prev) and not prev.startswith('#'):
+                out.append(m.group(2))  # strip the ## prefix
+                continue
+        out.append(line)
+    return '\n'.join(out)
+
+
 # ─── Core Extraction ──────────────────────────────────────────────────────────
 
 def extract_pdf(pdf_path: str, toc_only: bool = False) -> str:
@@ -471,6 +557,9 @@ def extract_pdf(pdf_path: str, toc_only: bool = False) -> str:
         raw_page_md = "\n".join(page_lines)
         # Apply heading enhancement pass
         raw_page_md = enhance_headings(page, raw_page_md)
+        # Merge continuation lines: a ## heading that is a run-on from the previous
+        # text line (previous line ends mid-sentence without punctuation) gets de-headed
+        raw_page_md = _merge_runon_headings(raw_page_md)
         # Post-process (dedup, spec tables, parts)
         clean_page_md = post.process(raw_page_md)
 
@@ -493,6 +582,9 @@ def extract_pdf(pdf_path: str, toc_only: bool = False) -> str:
 # ─── CLI Entry Point ──────────────────────────────────────────────────────────
 
 def main():
+    if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
+        sys.stdout = open(sys.stdout.fileno(), mode='w', encoding='utf-8', buffering=1)
+
     parser = argparse.ArgumentParser(
         description="Layout-aware PDF → Markdown extractor"
     )
