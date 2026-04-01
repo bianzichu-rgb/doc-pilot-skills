@@ -107,13 +107,15 @@ doc-pilot/
 ├── references/
 │   └── doc_types.md            ← Document type recognition guide
 ├── scripts/
-│   ├── fetch_doc.py            ← Acquisition strategy + CognoLiving cache
+│   ├── fetch_doc.py            ← Acquisition strategy + document cache
 │   ├── task_state.py           ← TaskPlan state machine (JSON persistence)
-│   └── template_store.py       ← Template CRUD + EWMA + skill performance tracking
+│   ├── template_store.py       ← Template CRUD + EWMA + skill performance tracking
+│   └── agent_dispatch.py       ← Multi-agent capability router (NEW)
 └── memory/                     ← Auto-generated at runtime
     ├── tasks/                  ← Per-task JSON (full execution trace)
     ├── templates/              ← Per-document-type learned templates
-    └── skill_performance.json  ← External skill effectiveness tracking
+    ├── agent_registry.json     ← Available agents + their capabilities (user-editable)
+    └── skill_performance.json  ← Agent effectiveness by capability + task type
 
 doc-pilot-pdf/
 ├── SKILL.md
@@ -125,6 +127,25 @@ doc-pilot-analyst/
 └── scripts/
     └── analyse.py              ← 9-category classifier + figure registry
 ```
+
+### Multi-Agent Dispatch
+
+doc-pilot can route capabilities to different agents — Claude sub-skills, direct Claude API
+model variants (haiku/sonnet/opus), or Claude built-in tools (WebSearch/WebFetch):
+
+```bash
+# Ask: "which agent is best for PDF extraction on appliance manuals?"
+python ~/.claude/skills/doc-pilot/scripts/agent_dispatch.py best-agent \
+  --capability pdf_extraction --task-type appliance_manual
+# → BEST_AGENT=doc-pilot-pdf  success_rate=0.92  total_calls=14
+
+# Enable direct Claude API agents by editing memory/agent_registry.json:
+# "claude-haiku": { "enabled": true, ... }  ← fast translation/preprocessing
+# "claude-opus":  { "enabled": true, ... }  ← safety-critical or ambiguous steps
+```
+
+The performance tracker uses EWMA (α=0.25) — each recorded `ok`/`fail` outcome nudges
+the agent's success rate, so the dispatcher naturally shifts toward better-performing agents.
 
 ---
 
@@ -138,4 +159,11 @@ Export yours and open a PR — others can import them to skip the cold-start pha
 
 ## License
 
-Apache 2.0
+The code in this repository is licensed under **Apache 2.0**.
+
+**Third-party dependency notice:**
+`doc-pilot-pdf` uses [PyMuPDF (fitz)](https://pymupdf.readthedocs.io/) for PDF parsing,
+which is licensed under **GNU AGPL 3.0**. If you redistribute a product that includes
+`doc-pilot-pdf`, you must comply with AGPL 3.0 (including making source available).
+PyMuPDF commercial licenses are available from [Artifex](https://artifex.com/) if
+AGPL is incompatible with your distribution model.

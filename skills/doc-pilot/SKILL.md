@@ -49,6 +49,43 @@ hooks:
 
 ---
 
+## Agent Dispatch (Capability Routing)
+
+Before invoking any helper capability, query the dispatch layer to select the best available agent:
+
+```bash
+# Which agent should handle PDF extraction for this task type?
+python ~/.claude/skills/doc-pilot/scripts/agent_dispatch.py best-agent \
+  --capability pdf_extraction --task-type "appliance_manual"
+
+# Which agent handles translation?
+python ~/.claude/skills/doc-pilot/scripts/agent_dispatch.py best-agent \
+  --capability translation
+
+# List all agents that support a capability
+python ~/.claude/skills/doc-pilot/scripts/agent_dispatch.py list-agents \
+  --capability fault_diagnosis
+```
+
+After using an agent, record the outcome so the dispatcher learns:
+```bash
+python ~/.claude/skills/doc-pilot/scripts/agent_dispatch.py record \
+  --agent "doc-pilot-pdf" --capability "pdf_extraction" \
+  --task-type "appliance_manual" --outcome ok
+```
+
+**Agent types in the registry** (`memory/agent_registry.json`):
+
+| Type | Examples | Use case |
+|------|----------|----------|
+| `claude_skill` | doc-pilot-pdf, doc-pilot-analyst | Structured extraction / classification |
+| `claude_api` | claude-haiku, claude-sonnet, claude-opus | Direct LLM call (translation, complex reasoning, safety-critical) |
+| `claude_tool` | WebSearch, WebFetch | Online search / URL fetch |
+
+`claude_api` agents are **disabled by default** — enable them in `memory/agent_registry.json` once `ANTHROPIC_API_KEY` is set. The dispatcher automatically routes to the highest-performing enabled agent for each capability.
+
+---
+
 ## Step 1: Document Acquisition
 
 ### Local PDF
