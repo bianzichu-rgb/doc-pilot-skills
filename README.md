@@ -34,7 +34,7 @@ semantic structure analysis, and self-learning task navigation.
 
 ```bash
 # Clone into your Claude skills directory
-git clone https://github.com/<you>/doc-pilot-skills ~/.claude/skills/doc-pilot-suite
+git clone https://github.com/bianzichu-rgb/doc-pilot-skills ~/.claude/skills/doc-pilot-suite
 
 # Symlink each skill
 ln -s ~/.claude/skills/doc-pilot-suite/skills/doc-pilot       ~/.claude/skills/doc-pilot
