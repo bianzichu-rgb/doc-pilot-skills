@@ -56,7 +56,11 @@ DEFAULT_REGISTRY: Dict[str, Any] = {
             "enabled": True
         },
         # ── Claude API Model Variants ─────────────────────────────────────────
-        # Enable by setting enabled=true and ensuring ANTHROPIC_API_KEY is set.
+        # ⚠️  SECURITY: NEVER put your actual API key in this file.
+        # Set the environment variable instead:  export ANTHROPIC_API_KEY=sk-ant-...
+        # This file (agent_registry.json) is excluded from git via .gitignore,
+        # but if you accidentally add it, an exposed key here would be a serious leak.
+        # Enable by setting enabled=true and ensuring ANTHROPIC_API_KEY env var is set.
         "claude-haiku": {
             "type": "claude_api",
             "model": "claude-haiku-4-5-20251001",

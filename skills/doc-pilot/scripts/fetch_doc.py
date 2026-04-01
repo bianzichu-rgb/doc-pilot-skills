@@ -16,6 +16,7 @@ Usage:
 """
 
 import sys
+import os
 import json
 import hashlib
 import argparse
@@ -27,8 +28,10 @@ MEMORY_DIR = Path(__file__).parent.parent / "memory"
 DOC_CACHE_DIR = MEMORY_DIR / "doc_cache"
 DOC_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
-# CognoLiving's existing perfect_md library (3478 pre-processed manuals)
-COGNO_MD_DIR = Path(r"C:\AI\CognoLiving 2.0\perfect_md")
+# Optional: local pre-processed manual library path (set via env var or edit here)
+# Example: export DOC_PILOT_LIBRARY="C:\AI\MyManuals\perfect_md"
+_env_lib = os.environ.get("DOC_PILOT_LIBRARY", "")
+COGNO_MD_DIR = Path(_env_lib) if _env_lib else None
 
 
 # ─── Strategy Determination ───────────────────────────────────────────────────

@@ -1,9 +1,23 @@
-# Runtime memory (private user data)
+# ── Runtime memory (private user data — NEVER commit these) ──────────────────
 skills/doc-pilot/memory/tasks/
 skills/doc-pilot/memory/doc_cache/
 skills/doc-pilot/memory/skill_performance.json
-# Template library - user can choose to share
+skills/doc-pilot/memory/agent_registry.json
+skills/doc-pilot/memory/session_log.md
+
+# Template library - users can share by removing the line below
 # skills/doc-pilot/memory/templates/
+
+# ── Secrets safety net ───────────────────────────────────────────────────────
+# API keys must NEVER be stored in files — use environment variables only.
+.env
+.env.*
+*.env
+.env.local
+.env.production
+
+# ── Build artifacts ───────────────────────────────────────────────────────────
 *.tmp
 __pycache__/
 *.pyc
+*.pyo
