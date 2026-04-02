@@ -25,6 +25,28 @@ It can be packaged as a **skill, tool, or workflow adapter** inside different ag
 
 ---
 
+## Use Cases
+
+| Scenario | How doc-pilot helps |
+|----------|---------------------|
+| 🏠 **Smart home systems** | Let your LLM guide users through appliance installation, configuration, and troubleshooting — grounded in the actual manual |
+| 🔧 **After-sales & repair assistants** | Turn device handbooks into executable step-by-step fault diagnosis flows with branching and failure memory |
+| 🏢 **Enterprise doc assistants** | Convert SOPs, ops runbooks, and process docs into trackable task navigation with cross-session progress |
+| 🤖 **Agent toolchains** | Embed as a host-agnostic document navigation engine into any agent runtime (Claude Code, OpenClaw, custom) |
+
+---
+
+## 应用场景
+
+| 场景 | doc-pilot 的作用 |
+|------|-----------------|
+| 🏠 **家庭智能系统** | 让大模型根据家电说明书指导用户完成安装、配置和故障排查 |
+| 🔧 **售后与维修助手** | 把设备手册转成可执行的分步排障流程，支持失败分支和历史记忆 |
+| 🏢 **企业文档助手** | 把 SOP、运维手册和流程文档转成可跨会话跟踪进度的任务导航 |
+| 🤖 **Agent 工具链** | 作为宿主无关的文档导航引擎，接入 Claude Code、OpenClaw 或自定义 runtime |
+
+---
+
 ## How is this different?
 
 | | Direct LLM | RAG / PDF parser | doc-pilot |
