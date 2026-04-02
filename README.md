@@ -8,16 +8,19 @@
 
 > Navigate any document, step by step. Gets smarter every use.
 
-**doc-pilot turns manuals, PDFs, and long documents into stateful task walkthroughs.**
+**doc-pilot is a host-agnostic document navigation engine** for manuals, PDFs, and long documents.
 It fetches the right document, finds the relevant section, guides you step by step,
 and learns from every completion — so similar tasks start faster next time.
 
+It can be packaged as a **skill, tool, or workflow adapter** inside different agent runtimes.
+
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![PyMuPDF](https://img.shields.io/badge/PDF-PyMuPDF%20AGPL3-orange.svg)](https://pymupdf.readthedocs.io/)
-[![Claude Code](https://img.shields.io/badge/runs%20on-Claude%20Code-blueviolet.svg)](https://claude.ai/code)
+[![Claude Code](https://img.shields.io/badge/adapter-Claude%20Code-blueviolet.svg)](https://claude.ai/code)
+[![Claw](https://img.shields.io/badge/adapter-Claw%20(planned)-lightgrey.svg)](#host-integrations)
 
-> This repo contains the **doc-pilot skill suite for Claude Code** — three standalone skills
-> that can be used together or independently.
+> This repository currently ships the **Claude Code skill adapter** for doc-pilot.
+> The core engine is designed to be portable across agent runtimes.
 
 ---
 
@@ -31,6 +34,7 @@ and learns from every completion — so similar tasks start faster next time.
 | Cross-session memory | ✗ | ✗ | ✅ |
 | Learns from completions | ✗ | ✗ | ✅ |
 | Routes to best agent per task | ✗ | ✗ | ✅ |
+| Portable across agent runtimes | ✗ | ✗ | ✅ |
 
 Not just document extraction. Not just question answering. Not just workflow memory.
 
@@ -39,7 +43,8 @@ Not just document extraction. Not just question answering. Not just workflow mem
 ## Demo
 
 ```
-You:  My Bosch dishwasher is showing E9. Help me fix it.
+Invoke from your agent host:
+  "My Bosch dishwasher is showing E9. Help me fix it."
 
 doc-pilot:
   ✦ Fetching Bosch SGS4HMI61E manual...
@@ -56,19 +61,29 @@ doc-pilot:
 
   ✅ Done, next step   ❌ Didn't work, try another way
 
-You:  ❌
-
-doc-pilot:
   ▶ Step 2 of 4: Clean the inlet filter
     ⚠  Known failure point — affects 27% of attempts at this step
     1. Turn off water supply, unscrew the inlet hose
     2. Remove mesh filter with pliers — rinse under tap
-    3. Expected: filter was blocked with debris
 ```
 
 ---
 
-## Try it in 3 minutes
+## Host Integrations
+
+doc-pilot's core workflow is portable. The host is responsible for:
+receiving user input, providing file/network access, and executing prompts.
+
+| Host | Status | Install |
+|------|--------|---------|
+| Claude Code (skills) | ✅ Available | [Quick Start →](#quick-start-claude-code) |
+| Claw | 🔜 Planned | — |
+| Generic CLI / local workflow | 🔜 Planned | [Integration contract →](#host-integration-contract) |
+| Other agent runtimes | 🔜 Adaptable | [Integration contract →](#host-integration-contract) |
+
+---
+
+## Quick Start — Claude Code
 
 **Prerequisites:** Claude Code · Python 3.8+ · `pip install pymupdf`
 
@@ -82,32 +97,55 @@ ln -s ~/.claude/skills/doc-pilot-suite/skills/doc-pilot-analyst ~/.claude/skills
 pip install pymupdf
 ```
 
-Then open Claude Code and try these three things — in order — to verify it works:
+Verify it works in 3 steps — in order:
 
 ```
 # 1 — Does it find documents?
 "Help me troubleshoot Bosch SGS4HMI61E E9 error"
 
-# 2 — Does it build a step-by-step plan?
+# 2 — Does it build a step plan?
 "Walk me through this PDF: ./manuals/router_setup.pdf"
 
 # 3 — Does it remember? (run again after completing #1)
 "My Bosch dishwasher shows E9 again"
 ```
 
-**What you should see after step 1:**
+**Expected output after step 1:**
 ```
-✓ Fetched manual (SGS4HMI61E service manual, 48 pages)
+✓ Fetched manual (SGS4HMI61E, 48 pages)
 ✓ Classified section: TROUBLESHOOTING
 ✓ Built 4-step plan
 ✓ Saved reusable template → bosch_e9_water_inlet.json
 ```
 
-**What you should see after step 3 (second run):**
+**Expected output after step 3 (second run):**
 ```
 ✓ Template matched: bosch_e9_water_inlet
-  success rate 87%  |  prior completions: 1  ← your run was recorded
-  Known issue at Step 2: inlet filter blockage (27% fail rate)
+  success rate 87%  |  prior completions: 1  ← your run recorded
+  Known issue at Step 2: inlet filter (27% fail rate)
+```
+
+---
+
+## Quick Start — Generic Host
+
+The core engine requires no framework. Any host that can:
+- pass a user prompt to an LLM
+- execute Python scripts
+- read/write local files
+
+...can run doc-pilot. Full integration contract → [see below](#host-integration-contract).
+
+```bash
+# Standalone PDF extraction (no host needed)
+python skills/doc-pilot-pdf/scripts/extract.py ./manual.pdf --output ./manual.md
+
+# Standalone section classification
+python skills/doc-pilot-analyst/scripts/analyse.py ./manual.md
+
+# Standalone template lookup
+python skills/doc-pilot/scripts/template_store.py lookup \
+  --task-type fault_diagnosis --product dishwasher --brand bosch --fault-code E9
 ```
 
 ---
@@ -128,30 +166,10 @@ Then open Claude Code and try these three things — in order — to verify it w
   "usage_count": 6,
   "avg_duration_sec": 847,
   "steps": [
-    {
-      "step_id": "s1",
-      "title": "Check water supply valve",
-      "historical_fail_rate": 0.12,
-      "run_count": 6
-    },
-    {
-      "step_id": "s2",
-      "title": "Clean the inlet filter",
-      "historical_fail_rate": 0.27,
-      "run_count": 5
-    },
-    {
-      "step_id": "s3",
-      "title": "Test inlet valve solenoid",
-      "historical_fail_rate": 0.40,
-      "run_count": 3
-    },
-    {
-      "step_id": "s4",
-      "title": "Call service — replace inlet valve",
-      "historical_fail_rate": 0.0,
-      "run_count": 1
-    }
+    { "step_id": "s1", "title": "Check water supply valve",      "historical_fail_rate": 0.12, "run_count": 6 },
+    { "step_id": "s2", "title": "Clean the inlet filter",        "historical_fail_rate": 0.27, "run_count": 5 },
+    { "step_id": "s3", "title": "Test inlet valve solenoid",     "historical_fail_rate": 0.40, "run_count": 3 },
+    { "step_id": "s4", "title": "Call service — replace valve",  "historical_fail_rate": 0.00, "run_count": 1 }
   ]
 }
 ```
@@ -174,21 +192,21 @@ Then open Claude Code and try these three things — in order — to verify it w
 }
 ```
 
-Pick up this task in a later session: `"Continue my dishwasher repair"`
+Resume in a later session: `"Continue my dishwasher repair"`
 
 </details>
 
 ---
 
-## Features
+## Core Capabilities
 
-- 📄 **Auto-fetch** — PDF path, URL, or product name → doc-pilot finds the document
+- 📄 **Auto-fetch** — PDF path, URL, or product name → engine finds the document
 - 🏗️ **Layout-aware extraction** — font hierarchy, dual-column, TOC, spec tables preserved
 - 🗂️ **Section classifier** — 9 semantic categories so long manuals don't overwhelm context
 - 🧠 **Template memory** — proven step plans reused; high-failure steps flagged proactively
 - 📈 **EWMA learning** — success rates update per completion (α=0.2); no manual curation
 - 🤖 **Multi-agent dispatch** — routes to best available agent per capability + task type
-- 🔁 **Session consolidation** — `onSessionEnd` hook auto-distills patterns after every session
+- 🔁 **Session consolidation** — auto-distills patterns after every session
 
 ---
 
@@ -208,87 +226,98 @@ Second run on same document type
 Multi-agent learning
   → tracks which agent performed best per capability + task type
   → routes to the proven winner next time
-  → recorded in memory/skill_performance.json
 ```
-
-Share your `memory/templates/*.json` files — others can import them to skip the cold-start phase.
 
 ---
 
-## Skills in this repo
+## Engine Architecture
 
-| Skill | What it does | Use standalone? |
-|-------|-------------|-----------------|
-| [`doc-pilot`](skills/doc-pilot/) | Orchestrator: fetch → classify → navigate → learn | ✅ Main entry point |
-| [`doc-pilot-pdf`](skills/doc-pilot-pdf/) | PDF → Markdown with font hierarchy, TOC, figures | ✅ PDF extractor |
-| [`doc-pilot-analyst`](skills/doc-pilot-analyst/) | Classifies sections into 9 semantic categories | ✅ Doc analyser |
+```
+core engine
+├── fetch_doc.py       ← acquisition: PDF / URL / web search
+├── task_state.py      ← stateful step machine (JSON persistence)
+├── template_store.py  ← CRUD + EWMA learning flywheel
+└── agent_dispatch.py  ← capability router (skill / API / tool)
+
+host adapters (current: Claude Code skills)
+├── doc-pilot/         ← orchestrator SKILL.md + scripts
+├── doc-pilot-pdf/     ← PDF → Markdown adapter
+└── doc-pilot-analyst/ ← section classifier adapter
+
+memory/ (local, gitignored)
+├── templates/         ← learned step plans per document type
+├── agent_registry.json← agent capabilities + routing config
+└── skill_performance.json
+```
 
 ---
 
-## Architecture
+## Host Integration Contract
 
-```
-doc-pilot/
-├── SKILL.md               ← trigger conditions + full workflow
-├── scripts/
-│   ├── fetch_doc.py       ← acquisition: PDF / URL / search
-│   ├── task_state.py      ← step state machine (JSON persistence)
-│   ├── template_store.py  ← CRUD + EWMA learning
-│   └── agent_dispatch.py  ← capability router (skill / API / tool)
-└── memory/
-    ├── templates/         ← learned step plans per document type
-    ├── agent_registry.json← available agents + capabilities (local, gitignored)
-    └── skill_performance.json (local, gitignored)
+To integrate doc-pilot into a new agent runtime, the host must provide:
 
-doc-pilot-pdf/scripts/extract.py     ← font hierarchy, TOC, dual-col, spec tables
-doc-pilot-analyst/scripts/analyse.py ← 9-category classifier + figure registry
+| Requirement | Notes |
+|-------------|-------|
+| Prompt execution | Pass user input to an LLM with tool-use or function-call support |
+| File system access | Read/write to a local `memory/` directory for state + templates |
+| Python 3.8+ runtime | For the core engine scripts |
+| `pip install pymupdf` | PDF extraction only — optional if PDF support is not needed |
+
+**Minimum integration flow:**
 ```
+user_input
+  → [host] route to doc-pilot orchestrator
+  → fetch_doc.py  (determine acquisition strategy)
+  → extract.py    (if PDF — optional)
+  → analyse.py    (if long doc — optional)
+  → template_store.py lookup (check for prior completions)
+  → [LLM] generate or reuse TaskPlan
+  → task_state.py (stateful step tracking)
+  → [host] present steps, collect ✅/❌ feedback
+  → template_store.py record (update learning)
+```
+
+The host does not need to implement memory, routing, or learning —
+those are handled by the engine scripts.
 
 ---
 
 ## Limitations
 
-- **Structured documents work best** — repair manuals, setup guides, troubleshooting trees.
-  Narrative or legal documents have lower step extraction accuracy.
-- **Scanned PDFs** — image-only PDFs with no text layer are not supported. OCR fallback is on the roadmap.
-- **Template quality depends on volume** — a template is only created after ≥3 similar completions.
-  First runs always use LLM generation.
-- **Agent routing** — `claude_api` agents (haiku/sonnet/opus) are disabled by default.
-  Direct API routing requires `ANTHROPIC_API_KEY` and manual opt-in in `memory/agent_registry.json`.
-- **Web fetch quality** — manual retrieval via search depends on source availability and structure.
+- **Structured documents work best** — repair manuals, setup guides, troubleshooting trees
+- **Scanned PDFs not yet supported** — image-only PDFs require OCR (on roadmap)
+- **Template quality needs volume** — ≥3 similar completions before template creation; first runs use LLM generation
+- **`claude_api` agents disabled by default** — direct API routing requires `ANTHROPIC_API_KEY` and opt-in in `memory/agent_registry.json`
+- **Web fetch quality varies** — depends on source availability and document structure
 
 ---
 
 ## Roadmap
 
 - [ ] OCR fallback for scanned PDFs
+- [ ] Claw host adapter
+- [ ] Generic CLI adapter
 - [ ] `template export --sanitize` — strip device identifiers before sharing
 - [ ] Sample template library for common appliance brands (Bosch, Miele, LG, Dyson)
 - [ ] Template version history + rollback
-- [ ] Benchmark agent routing quality across task types
 
 ---
 
 ## Contributing
 
-The most valuable contribution is a `memory/templates/*.json` file.
-Each one represents real accumulated experience on a document type.
+**Most valuable:** a `memory/templates/*.json` file.
+Each one is real accumulated experience on a document type that others can import.
 
 1. Complete a task with doc-pilot
-2. Find the generated template in `~/.claude/skills/doc-pilot/memory/templates/`
-3. Remove any personal identifiers (serial numbers, custom names)
-4. Open a PR — others skip the cold-start phase
+2. Find the template in `~/.claude/skills/doc-pilot/memory/templates/`
+3. Remove personal identifiers (serial numbers, custom names)
+4. Open a PR
 
-To test a skill locally:
+**Test locally:**
 ```bash
-# Test PDF extraction
-python ~/.claude/skills/doc-pilot-pdf/scripts/extract.py ./your_manual.pdf
-
-# Test section classification
-python ~/.claude/skills/doc-pilot-analyst/scripts/analyse.py ./extracted.md
-
-# Test template lookup
-python ~/.claude/skills/doc-pilot/scripts/template_store.py lookup \
+python skills/doc-pilot-pdf/scripts/extract.py ./manual.pdf
+python skills/doc-pilot-analyst/scripts/analyse.py ./extracted.md
+python skills/doc-pilot/scripts/template_store.py lookup \
   --task-type fault_diagnosis --product dishwasher --brand bosch --fault-code E9
 ```
 
@@ -311,14 +340,18 @@ Redistribution including `doc-pilot-pdf` requires AGPL compliance.
 
 > 逐步导航任何文档，越用越聪明。
 
-**doc-pilot 把说明书、PDF 和长文档变成可持续跟踪进度的任务导航。**
-它先找到正确的文档，再定位相关章节，然后一步步带你完成任务，
+**doc-pilot 是一个宿主无关的文档任务导航引擎**，适用于说明书、PDF 和长文档。
+它先找到正确的文档，定位相关章节，一步步带你完成任务，
 并把每次完成经验沉淀下来——让下次同类任务更快开始。
 
-[![许可证](https://img.shields.io/badge/许可证-Apache%202.0-blue.svg)](LICENSE)
-[![Claude Code](https://img.shields.io/badge/运行于-Claude%20Code-blueviolet.svg)](https://claude.ai/code)
+它可以被封装成 **skill、tool 或 workflow adapter**，接入不同的 agent 运行环境。
 
-> 这个仓库提供的是面向 **Claude Code** 的 doc-pilot 技能套件，包含三个可独立使用的技能。
+[![许可证](https://img.shields.io/badge/许可证-Apache%202.0-blue.svg)](LICENSE)
+[![Claude Code](https://img.shields.io/badge/适配器-Claude%20Code-blueviolet.svg)](https://claude.ai/code)
+[![Claw](https://img.shields.io/badge/适配器-Claw（计划中）-lightgrey.svg)](#宿主集成)
+
+> 这个仓库当前提供 doc-pilot 的 **Claude Code skill 适配器**。
+> 核心引擎本身按宿主无关方式设计，可扩展到其他 agent runtime。
 
 ---
 
@@ -332,6 +365,7 @@ Redistribution including `doc-pilot-pdf` requires AGPL compliance.
 | 跨会话记忆 | ✗ | ✗ | ✅ |
 | 从完成记录中学习 | ✗ | ✗ | ✅ |
 | 按任务类型调度最优智能体 | ✗ | ✗ | ✅ |
+| 可移植到不同 agent 宿主 | ✗ | ✗ | ✅ |
 
 不只是文档提取，不只是问答，不只是流程记录。
 
@@ -340,7 +374,8 @@ Redistribution including `doc-pilot-pdf` requires AGPL compliance.
 ## 演示
 
 ```
-你：  我的博世洗碗机显示 E9，帮我修。
+在你的 agent 宿主中调用：
+  "我的博世洗碗机显示 E9，帮我修。"
 
 doc-pilot:
   ✦ 正在获取博世 SGS4HMI61E 说明书...
@@ -357,19 +392,26 @@ doc-pilot:
 
   ✅ 完成，下一步   ❌ 没用，换个方法
 
-你：  ❌
-
-doc-pilot:
   ▶ 第 2 步 / 共 4 步：清洁进水过滤网
     ⚠  已知高失败率步骤 — 历史上 27% 的尝试在此卡住
-    1. 关闭进水阀，从机器背面拧下进水管
-    2. 用钳子取出网状过滤器，在水龙头下冲洗
-    3. 预期结果：过滤器被杂质堵塞
 ```
 
 ---
 
-## 3 分钟快速验证
+## 宿主集成
+
+doc-pilot 的核心工作流是可移植的。宿主需要提供：接收用户输入、访问文件和网络、执行 prompt。
+
+| 宿主 | 状态 | 安装方式 |
+|------|------|---------|
+| Claude Code（skills） | ✅ 已支持 | [快速开始 →](#快速开始--claude-code) |
+| Claw | 🔜 计划中 | — |
+| 通用 CLI / 本地工作流 | 🔜 计划中 | [集成接口说明 →](#宿主集成接口) |
+| 其他 agent runtime | 🔜 可适配 | [集成接口说明 →](#宿主集成接口) |
+
+---
+
+## 快速开始 — Claude Code
 
 **前置条件：** Claude Code · Python 3.8+ · `pip install pymupdf`
 
@@ -398,7 +440,7 @@ pip install pymupdf
 
 **第 1 次运行后你应该看到：**
 ```
-✓ 已获取说明书（SGS4HMI61E 服务手册，48 页）
+✓ 已获取说明书（SGS4HMI61E，48 页）
 ✓ 章节分类：故障排除
 ✓ 已生成 4 步计划
 ✓ 已保存可复用模板 → bosch_e9_water_inlet.json
@@ -409,6 +451,29 @@ pip install pymupdf
 ✓ 匹配模板：bosch_e9_water_inlet
   成功率 87%  |  已完成次数：1  ← 你的记录已被保存
   第 2 步已知问题：进水过滤网堵塞（失败率 27%）
+```
+
+---
+
+## 快速开始 — 通用宿主
+
+核心引擎不依赖任何框架。任何能够：
+- 向 LLM 传递用户 prompt
+- 执行 Python 脚本
+- 读写本地文件
+
+…的宿主都可以运行 doc-pilot。完整接口说明见下方。
+
+```bash
+# 单独运行 PDF 提取（无需宿主）
+python skills/doc-pilot-pdf/scripts/extract.py ./manual.pdf --output ./manual.md
+
+# 单独运行章节分类
+python skills/doc-pilot-analyst/scripts/analyse.py ./manual.md
+
+# 单独运行模板查找
+python skills/doc-pilot/scripts/template_store.py lookup \
+  --task-type fault_diagnosis --product dishwasher --brand bosch --fault-code E9
 ```
 
 ---
@@ -429,30 +494,10 @@ pip install pymupdf
   "usage_count": 6,
   "avg_duration_sec": 847,
   "steps": [
-    {
-      "step_id": "s1",
-      "title": "检查进水阀",
-      "historical_fail_rate": 0.12,
-      "run_count": 6
-    },
-    {
-      "step_id": "s2",
-      "title": "清洁进水过滤网",
-      "historical_fail_rate": 0.27,
-      "run_count": 5
-    },
-    {
-      "step_id": "s3",
-      "title": "测试进水电磁阀",
-      "historical_fail_rate": 0.40,
-      "run_count": 3
-    },
-    {
-      "step_id": "s4",
-      "title": "联系维修——更换进水阀",
-      "historical_fail_rate": 0.0,
-      "run_count": 1
-    }
+    { "step_id": "s1", "title": "检查进水阀",       "historical_fail_rate": 0.12, "run_count": 6 },
+    { "step_id": "s2", "title": "清洁进水过滤网",   "historical_fail_rate": 0.27, "run_count": 5 },
+    { "step_id": "s3", "title": "测试进水电磁阀",   "historical_fail_rate": 0.40, "run_count": 3 },
+    { "step_id": "s4", "title": "联系维修更换进水阀", "historical_fail_rate": 0.00, "run_count": 1 }
   ]
 }
 ```
@@ -481,15 +526,15 @@ pip install pymupdf
 
 ---
 
-## 功能
+## 核心能力
 
-- 📄 **自动获取文档** — 给它 PDF 路径、URL 或产品名称，它自动找到说明书
+- 📄 **自动获取文档** — PDF 路径、URL 或产品名称，引擎自动找到说明书
 - 🏗️ **版面感知提取** — 字体层级、双栏排版、目录、规格表，结构完整保留
-- 🗂️ **章节语义分类** — 9 个类别（安全/安装/故障排除/规格…），先定位再导航，不淹没上下文
-- 🧠 **模板记忆** — 沉淀已验证步骤；历史高失败率步骤在你踩坑前主动预警
+- 🗂️ **章节语义分类** — 9 个类别，先定位相关章节再开始步骤导航
+- 🧠 **模板记忆** — 沉淀已验证步骤；历史高失败率步骤提前预警
 - 📈 **EWMA 自动学习** — 每次完成自动更新成功率（α=0.2），无需人工整理
-- 🤖 **多智能体调度** — 按能力 + 任务类型路由到最优智能体（子技能或 Claude API 模型）
-- 🔁 **会话自动汇总** — `onSessionEnd` 钩子在每次会话结束后自动提炼导航规律
+- 🤖 **多智能体调度** — 按能力 + 任务类型路由到最优智能体
+- 🔁 **会话自动汇总** — 每次会话结束后自动提炼导航规律
 
 ---
 
@@ -509,84 +554,96 @@ pip install pymupdf
 多智能体学习
   → 追踪每种能力 + 任务类型的最优智能体
   → 下次自动路由到已验证的最优选项
-  → 记录于 memory/skill_performance.json
 ```
-
-导出你的 `memory/templates/*.json` 文件并发起 PR——帮助他人跳过冷启动阶段。
 
 ---
 
-## 技能列表
+## 引擎架构
 
-| 技能 | 功能 | 可单独使用？ |
-|------|------|------------|
-| [`doc-pilot`](skills/doc-pilot/) | 编排器：获取 → 分类 → 导航 → 学习 | ✅ 主入口 |
-| [`doc-pilot-pdf`](skills/doc-pilot-pdf/) | PDF → Markdown（字体层级/目录/图表） | ✅ 单独 PDF 提取 |
-| [`doc-pilot-analyst`](skills/doc-pilot-analyst/) | 章节语义分类，9 个类别 | ✅ 单独文档分析 |
+```
+核心引擎（宿主无关）
+├── fetch_doc.py       ← 文档获取：PDF / URL / 网络搜索
+├── task_state.py      ← 有状态步骤机（JSON 持久化）
+├── template_store.py  ← 模板增删改查 + EWMA 学习飞轮
+└── agent_dispatch.py  ← 能力路由（技能/API/工具）
+
+宿主适配层（当前：Claude Code skills）
+├── doc-pilot/         ← 编排器 SKILL.md + 脚本
+├── doc-pilot-pdf/     ← PDF → Markdown 适配器
+└── doc-pilot-analyst/ ← 章节分类适配器
+
+memory/（本地，已 gitignore）
+├── templates/         ← 每类文档的已学习步骤计划
+├── agent_registry.json← 智能体能力 + 路由配置
+└── skill_performance.json
+```
 
 ---
 
-## 架构
+## 宿主集成接口
 
-```
-doc-pilot/
-├── SKILL.md               ← 触发条件 + 完整工作流
-├── scripts/
-│   ├── fetch_doc.py       ← 文档获取：PDF / URL / 搜索
-│   ├── task_state.py      ← 步骤状态机（JSON 持久化）
-│   ├── template_store.py  ← 模板增删改查 + EWMA 学习
-│   └── agent_dispatch.py  ← 能力路由（技能/API/工具）
-└── memory/
-    ├── templates/         ← 每类文档的已学习步骤计划
-    ├── agent_registry.json← 可用智能体 + 能力（本地，已 gitignore）
-    └── skill_performance.json（本地，已 gitignore）
+将 doc-pilot 接入新的 agent runtime，宿主需要提供：
 
-doc-pilot-pdf/scripts/extract.py     ← 字体层级/目录/双栏/规格表
-doc-pilot-analyst/scripts/analyse.py ← 9 类语义分类 + 图表注册表
+| 需求 | 说明 |
+|------|------|
+| Prompt 执行 | 将用户输入传递给支持工具调用的 LLM |
+| 文件系统访问 | 对本地 `memory/` 目录的读写权限，用于状态和模板 |
+| Python 3.8+ 运行时 | 执行核心引擎脚本 |
+| `pip install pymupdf` | 仅 PDF 提取需要，其他功能可选 |
+
+**最小集成流程：**
 ```
+用户输入
+  → [宿主] 路由到 doc-pilot 编排器
+  → fetch_doc.py   （确定文档获取策略）
+  → extract.py     （如果是 PDF — 可选）
+  → analyse.py     （如果是长文档 — 可选）
+  → template_store.py lookup （检查历史模板）
+  → [LLM] 生成或复用任务计划
+  → task_state.py  （有状态步骤跟踪）
+  → [宿主] 呈现步骤，收集 ✅/❌ 反馈
+  → template_store.py record （更新学习）
+```
+
+宿主不需要实现记忆、路由或学习逻辑——这些都由引擎脚本处理。
 
 ---
 
 ## 已知限制
 
-- **结构化文档效果最好** — 维修手册、安装指南、故障排除树。叙述性或法律文档提取准确率较低。
-- **扫描版 PDF 暂不支持** — 纯图片 PDF（无文字层）无法处理，OCR 回退在路线图中。
-- **模板需要积累** — 需要 ≥3 次同类完成后才会创建模板，首次运行总是由 LLM 生成计划。
-- **智能体路由** — `claude_api` 智能体（haiku/sonnet/opus）默认关闭，需配置 `ANTHROPIC_API_KEY` 并在 `memory/agent_registry.json` 中手动启用。
-- **网络抓取质量** — 依赖搜索结果和来源结构，可能因文档来源不同而有差异。
+- **结构化文档效果最好** — 维修手册、安装指南、故障排除树；叙述性文档提取准确率较低
+- **扫描版 PDF 暂不支持** — 纯图片 PDF 需要 OCR，在路线图中
+- **模板需要积累** — ≥3 次同类完成才会创建模板，首次总是由 LLM 生成
+- **`claude_api` 智能体默认关闭** — 需配置 `ANTHROPIC_API_KEY` 并在 `memory/agent_registry.json` 中手动启用
+- **网络抓取质量** — 依赖搜索结果和来源结构，可能因文档来源不同而有差异
 
 ---
 
 ## 路线图
 
 - [ ] 扫描版 PDF 的 OCR 回退支持
+- [ ] Claw 宿主适配器
+- [ ] 通用 CLI 适配器
 - [ ] `template export --sanitize` — 导出前自动移除设备标识符
 - [ ] 常见家电品牌示例模板库（博世、美诺、LG、戴森）
 - [ ] 模板版本历史与回滚
-- [ ] 跨任务类型的智能体路由质量基准测试
 
 ---
 
 ## 贡献指南
 
-最有价值的贡献是一个 `memory/templates/*.json` 文件，
-每个文件代表某类文档的真实使用经验积累。
+**最有价值的贡献**是一个 `memory/templates/*.json` 文件——每个文件代表某类文档的真实使用经验。
 
 1. 用 doc-pilot 完成一次任务
 2. 在 `~/.claude/skills/doc-pilot/memory/templates/` 找到生成的模板
 3. 移除个人标识符（序列号、自定义名称等）
-4. 发起 PR — 帮助他人跳过冷启动阶段
+4. 发起 PR
 
 本地测试方式：
 ```bash
-# 测试 PDF 提取
-python ~/.claude/skills/doc-pilot-pdf/scripts/extract.py ./your_manual.pdf
-
-# 测试章节分类
-python ~/.claude/skills/doc-pilot-analyst/scripts/analyse.py ./extracted.md
-
-# 测试模板查找
-python ~/.claude/skills/doc-pilot/scripts/template_store.py lookup \
+python skills/doc-pilot-pdf/scripts/extract.py ./your_manual.pdf
+python skills/doc-pilot-analyst/scripts/analyse.py ./extracted.md
+python skills/doc-pilot/scripts/template_store.py lookup \
   --task-type fault_diagnosis --product dishwasher --brand bosch --fault-code E9
 ```
 
